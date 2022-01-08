@@ -5,23 +5,40 @@ var renderer = new THREE.WebGLRenderer({ canvas: meuCanvas })
 var controlos = new THREE.OrbitControls(camara, renderer.domElement)
 var carregador = new THREE.GLTFLoader()
 var animationMixer = new THREE.AnimationMixer(cena)
+var loader = new THREE.TextureLoader()
+var raycaster = new THREE.Raycaster()
+var rato = new THREE.Vector2()
 var clipes = []
 var acoes = []
+var objectsToHide = []
+var materials = []
+var candidatos = []
+var objetosParaMudarTexturas = []
+var materialSelectionado
 
-var eixos = new THREE.AxesHelper()
-cena.add(eixos)
-var grelha = new THREE.GridHelper()
-cena.add(grelha)
 var clock = new THREE.Clock()
 clock.stop()
+
+function pegarPrimeiro() {
+    raycaster.setFromCamera(rato, camara)
+   
+    var intersetados = raycaster.intersectObjects(candidatos)
+
+    if (intersetados.length > 0)
+    {
+        for (var i = 0; i < objetosParaMudarTexturas.length; i++) {
+            objetosParaMudarTexturas[i].material = materialSelectionado 
+        }
+    }
+}
 
 renderer.setSize(680, 680)
 renderer.shadowMap.enabled = true
 renderer.render(cena, camara)
 
-camara.position.x = 6
-camara.position.y = 4
-camara.position.z = 7
+camara.position.x = 0
+camara.position.z = 40
+camara.position.y = 25
 camara.lookAt(0, 0, 0)
 
 carregador.load(
@@ -34,31 +51,70 @@ carregador.load(
                 elemento.castShadow = true
                 elemento.receiveShadow = true
             }
-        });
 
-        clipes.push(THREE.AnimationClip.findByName( gltf.animations, 'LocY' ))
+            if(elemento.name.includes("door") || elemento.name.includes("Extend") || elemento.name == "workBench") {
+                candidatos.push(elemento)
+                objetosParaMudarTexturas.push(elemento)
+            }
+
+            if(elemento.name.includes("workBench")) {
+                materials.push(elemento.material)
+                materialSelectionado = materials[0]
+            }
+        });
+        
+        texture = loader.load( './plywood.jpg' );
+        materials.push(new THREE.MeshBasicMaterial( { map: texture } ))
+        texture = loader.load( './Wood051.png' );
+        materials.push(new THREE.MeshBasicMaterial( { map: texture } ))
+
+        for (var i = 1; i <= 13; i++)
+            objectsToHide.push(cena.getObjectByName("Bloco" + i))
+        for (var i = 1; i <= 4; i++)
+            objectsToHide.push(cena.getObjectByName("Poste" + i))
+        objectsToHide.push(cena.getObjectByName("Parede"))
+        objectsToHide.push(cena.getObjectByName("Terra"))
+        objectsToHide.push(cena.getObjectByName("Chao"))
+        objectsToHide.push(cena.getObjectByName("Tabua1"))
+        objectsToHide.push(cena.getObjectByName("Tabua2"))
+        
+        clipes.push(THREE.AnimationClip.findByName( gltf.animations, 'benchExtendAction' ))
         acoes.push(animationMixer.clipAction(clipes[0]))
-        clipes.push(THREE.AnimationClip.findByName( gltf.animations, 'LocZ' ))
+        clipes.push(THREE.AnimationClip.findByName( gltf.animations, 'doorAction' ))
         acoes.push(animationMixer.clipAction(clipes[1]))
-        clipes.push(THREE.AnimationClip.findByName( gltf.animations, 'RotZ' ))
+        clipes.push(THREE.AnimationClip.findByName( gltf.animations, 'door1Action.001' ))
         acoes.push(animationMixer.clipAction(clipes[2]))
+        clipes.push(THREE.AnimationClip.findByName( gltf.animations, 'legExtend1Action' ))
+        acoes.push(animationMixer.clipAction(clipes[3]))
 
         acoes[0].play()
         acoes[1].play()
         acoes[2].play()
+        acoes[3].play()
     }
 )
 
-var luzPonto1 = new THREE.PointLight("white")
-luzPonto1.position.set(5, 3, 5)
-luzPonto1.castShadow = true
-cena.add(luzPonto1)
+window.onclick = function(evento) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    rato.x = ( ( evento.clientX - rect.left ) / ( rect. right - rect.left ) ) * 2 - 1;
+    rato.y = - ( ( evento.clientY - rect.top ) / ( rect.bottom - rect.top) ) * 2 + 1;
+    // invocar raycaster
+    pegarPrimeiro()
+}
+
+var ambientLight = new THREE.AmbientLight("white", 1.5)
+cena.add(ambientLight)
 
 var btn_play = document.getElementById("btn_play")
 var btn_pause = document.getElementById("btn_pause")
 var btn_stop = document.getElementById("btn_stop")
-var btn_reverse = document.getElementById("btn_reverse")
 var menu_loop = document.getElementById("menu_loop")
+var btn_hide = document.getElementById("btn_hide")
+var btn_repor = document.getElementById("btn_repor")
+
+var wood1 = document.getElementById("wood1")
+var wood2 = document.getElementById("wood2")
+var wood3 = document.getElementById("wood3")
 
 btn_play.addEventListener("click", () => {
     clock.start()
@@ -78,8 +134,24 @@ btn_stop.addEventListener("click", () => {
     animationMixer.timeScale = 1
 })
 
-btn_reverse.addEventListener("click", () => {
-    animationMixer.timeScale = -(animationMixer.timeScale)
+btn_hide.addEventListener("click", () => {
+    clock.stop()
+
+    acoes.forEach(acao => {
+        acao.reset()
+    });
+
+    for (var i = 0; i < objectsToHide.length; i++) {
+        objectsToHide[i].visible = !objectsToHide[i].visible
+    }
+
+    if(objectsToHide[0].visible){
+        btn_hide.innerText = "Mostrar só mesa"
+    }
+    else{
+        btn_hide.innerText = "Mostrar tudo"
+    }
+
 })
 
 menu_loop.addEventListener("change", () => {
@@ -106,13 +178,35 @@ menu_loop.addEventListener("change", () => {
         acao.setLoop(loop)
         acao.clampWhenFinished = clamp
     });
-    
-    clock.start()
+
+    acoes.forEach(acao => {
+        acao.reset()
+    });
+})
+
+wood1.addEventListener("click", () => {
+    materialSelectionado = materials[1]
+})
+
+wood2.addEventListener("click", () => {
+    materialSelectionado = materials[0]
+
+})
+
+wood3.addEventListener("click", () => {
+    materialSelectionado = materials[2]
+})
+
+btn_repor.addEventListener("click", () => {
+    for (var i = 0; i < objetosParaMudarTexturas.length; i++) {
+        objetosParaMudarTexturas[i].material = materials[0] 
+    }
 })
 
 function animar() {
     requestAnimationFrame(animar)
     renderer.render(cena, camara)
     animationMixer.update( clock.getDelta() )
+    
 }
 animar()
